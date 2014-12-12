@@ -58,6 +58,53 @@ struct pin_t
 };
 
 
+void set_pin(const struct pin_t *pin, uint8_t value)
+{
+	uint8_t mask = 1 << pin->pin;
+	volatile uint8_t *port;
+
+	switch(pin->port)
+	{
+		case PB: port = &PORTB; break;
+		case PC: port = &PORTC; break;
+		case PD: port = &PORTD; break;
+		default: port = 0;
+	};
+
+	*port = value ? *port | mask : *port & (~mask);
+}
+
+
+void set_pin_inout(const struct pin_t *pin, enum inout_e value)
+{
+	uint8_t mask = 1 << pin->pin;
+	volatile uint8_t *port;
+
+	switch(pin->port)
+	{
+		case PB: port = &DDRB; break;
+		case PC: port = &DDRC; break;
+		case PD: port = &DDRD; break;
+		default: port = 0;
+	}
+
+	*port = value ? *port | mask : *port & (~mask);
+}
+
+
+uint8_t read_pin(const struct pin_t *pin)
+{
+	uint8_t mask = 1 << pin->pin;
+	switch(pin->port)
+	{
+		case PB: return PINB & mask;
+		case PC: return PINC & mask;
+		case PD: return PIND & mask;
+		default: return 0;
+	}
+}
+
+
 struct time_t
 {
     uint8_t month;
@@ -138,53 +185,6 @@ uint8_t g_leds_state = 0;
 enum modes_e g_mode = MODE_NORMAL;
 
 
-void set_pin(const struct pin_t *pin, uint8_t value)
-{
-	uint8_t mask = 1 << pin->pin;
-	volatile uint8_t *port;
-
-	switch(pin->port)
-	{
-		case PB: port = &PORTB; break;
-		case PC: port = &PORTC; break;
-		case PD: port = &PORTD; break;
-		default: port = 0;
-	};
-
-	*port = value ? *port | mask : *port & (~mask);
-}
-
-
-void set_pin_inout(const struct pin_t *pin, enum inout_e value)
-{
-	uint8_t mask = 1 << pin->pin;
-	volatile uint8_t *port;
-
-	switch(pin->port)
-	{
-		case PB: port = &DDRB; break;
-		case PC: port = &DDRC; break;
-		case PD: port = &DDRD; break;
-		default: port = 0;
-	}
-
-	*port = value ? *port | mask : *port & (~mask);
-}
-
-
-uint8_t read_pin(const struct pin_t *pin)
-{
-	uint8_t mask = 1 << pin->pin;
-	switch(pin->port)
-	{
-		case PB: return PINB & mask;
-		case PC: return PINC & mask;
-		case PD: return PIND & mask;
-		default: return 0;
-	}
-}
-
-
 void set_number(const struct pin_t *pins, uint8_t number)
 {
 	set_pin(&pins[0], number & 0b0001);
@@ -234,12 +234,8 @@ void setup()
 	TCCR1A = 0; // set entire TCCR1A register to 0
 	TCCR1B = 0; // same for TCCR1B
 	TCNT1  = 0; //initialize counter value to 0
-	// set compare match register for 1hz increments
-//#ifdef DEBUG
-//	OCR1A = 1249; //Debug operating at 1Mhz
-//#else
+	// set compare match register for 100hz increments
 	OCR1A = 19999; // = (16*10^6) / (100*8) - 1 (must be <65536)
-//#endif
 	TCCR1B |= (1 << WGM12); // turn on CTC mode
 	TCCR1B |= (1 << CS11); // Set CS11 bit for 8 prescaler
 	TIMSK1 |= (1 << OCIE1A); // enable timer compare interrupt
@@ -247,6 +243,8 @@ void setup()
 	sei(); //enable interrupts
 }
 
+
+//Increment the second and adjust the other things appropriateley
 void inc_time()
 {
 	g_time.seconds++;
@@ -276,20 +274,26 @@ void inc_time()
 	}
 }
 
-//Timer interrupt function (called at 100 Hz)
-uint8_t g_ticks = 0;
-uint32_t g_millis = 0;
 
+uint8_t g_ticks_raw = 0;
+uint32_t g_ticks = 0; //Resolution of 10 ms
+
+//Timer interrupt function (called at 100 Hz)
 ISR(TIMER1_COMPA_vect)
 {
-	g_millis += 10;
-	if(++g_ticks > 99)
+	g_ticks++;
+	if(++g_ticks_raw > 99)
 	{
-		g_ticks = 0;
+		g_ticks_raw = 0;
 		if(g_mode == MODE_NORMAL)
 		inc_time();
 		set_pin(&pin_leds, g_leds_state = !g_leds_state);
 	}
+}
+
+uint32_t time_since(uint32_t time)
+{
+	return g_ticks - time;
 }
 
 
@@ -307,13 +311,14 @@ uint8_t  g_buttons[2] = {0, 0};
 //in case the button voltage changes rapidly
 void update_button(uint8_t index)
 {
-	uint8_t button = button_pressed(index);
-	if(buttons[index])
+	g_last_buttons[index] = g_buttons[index];
+	
+	if(button_pressed(index))
 	{
 		g_buttons[index] = 1;
-		g_last_button_action[index] = g_millis;
+		g_last_button_action[index] = g_ticks;
 	}
-	else if(time_since(g_last_button_action[index]) > 150)
+	else if(time_since(g_last_button_action[index]) > 15)
 	{
 		g_buttons[index] = 0;
 	}
@@ -330,7 +335,7 @@ void update_buttons(void)
 void on_increment_pressed()
 {
 	//reset blinking
-	g_last_blink_action = g_millis;
+	g_last_blink_action = g_ticks;
 	g_last_blink_state = 1;
 	
 	switch(g_mode)
@@ -353,17 +358,12 @@ void on_increment_pressed()
 }
 
 
-uint32_t time_since(uint32_t time)
-{
-	return g_millis - time;
-}
-
-
+//The main program (this function is called in an endless loop)
 void main_program(void)
 {
 	update_buttons();
 	
-	//Menu button pressed
+	//Menu button pressed? Switch menu mode
 	if(g_buttons[0] && !g_last_buttons[0])
 	{
 		g_mode = (enum modes_e)((g_mode + 1) % MODE_COUNT);
@@ -371,22 +371,22 @@ void main_program(void)
 		{
 			case MODE_SET_HOURS:
 			case MODE_SET_DAY:
-			g_blink_numbers = 1;
-			break;
+				g_blink_numbers = 1;
+				break;
 			case MODE_SET_MINUTES:
 			case MODE_SET_MONTH:
-			g_blink_numbers = 2;
-			break;
+				g_blink_numbers = 2;
+				break;
 			default:
-			g_blink_numbers = 0;
+				g_blink_numbers = 0;
 		};
-		g_last_blink_action = g_millis;
+		g_last_blink_action = g_ticks;
 		g_last_blink_state = 1;
-		g_last_inc_action = g_millis;
-		g_inc_pressed_time = g_millis;
+		g_last_inc_action = g_ticks;
+		g_inc_pressed_time = g_ticks;
 	}
 
-	if(g_mode != MODE_NORMAL) //Setup-mode
+	if(g_mode != MODE_NORMAL) //Inside Setup-mode?
 	{
 		//date/inc buttons pressed
 		if(g_buttons[1])
@@ -394,18 +394,18 @@ void main_program(void)
 			if(!g_last_buttons[1])
 			{
 				on_increment_pressed();
-				g_inc_pressed_time = g_millis;
+				g_inc_pressed_time = g_ticks;
 			}
 
-			if(time_since(g_inc_pressed_time) > 1000 && time_since(g_last_inc_action) > 150)
+			//Increment continously if pressed & hold
+			if(time_since(g_inc_pressed_time) > 100 && time_since(g_last_inc_action) > 15)
 			{
-				g_last_inc_action = g_millis;
+				g_last_inc_action = g_ticks;
 				on_increment_pressed();
 			}
 		}
 		
-		
-		//Are we currently setting time or date? display the appropriate
+		//Are we currently setting time or date? display the appropriate output
 		if(g_mode == MODE_SET_HOURS || g_mode == MODE_SET_MINUTES)
 		{
 			output[0] = g_time.hours;
@@ -420,9 +420,9 @@ void main_program(void)
 		// handle blinking of modifiable numbers
 		if(g_blink_numbers != 0)
 		{
-			if(time_since(g_last_blink_action) > 500)
+			if(time_since(g_last_blink_action) > 50)
 			{
-				g_last_blink_action = g_millis;
+				g_last_blink_action = g_ticks;
 				g_last_blink_state = !g_last_blink_state;
 			}
 			// Going beyond single-digit range of the display
@@ -446,31 +446,44 @@ void main_program(void)
 	}
 	
 	write_output(output[0], output[1]);
-	
-	g_last_buttons[0] = g_buttons[0];
-	g_last_buttons[1] = g_buttons[1];
 }
 
 
+// The test program (function is called in an endless loop)
+// Used to display all digits
+// Activated when both buttons are pressed during system startup
+// Button 0 switches between continous running mode (where
+// digits just get incremented every 250ms) and selective mode where
+// Button 1 is used to increment the digits
 void test_program(void)
 {
 	update_buttons();
 	
 	if(g_buttons[0] && !g_last_buttons[0])
-		g_blink_numbers = g_blink_numbers == 9 ? 0 : g_blink_numbers + 1;
-	else if(g_buttons[1] && !g_last_buttons[1])
-		g_blink_numbers = g_blink_numbers == 0 ? 9 : g_blink_numbers - 1;
-
+		g_last_blink_state = 1 - g_last_blink_state;
+	
+	if(g_last_blink_state == 0)
+	{
+		if(g_buttons[1] && !g_last_buttons[1])
+		{
+			g_last_blink_action = g_ticks;
+			g_blink_numbers = (g_blink_numbers + 1) % 10;
+		}
+	}
+	else if(time_since(g_last_blink_action) > 25)
+	{	
+		g_last_blink_action = g_ticks;
+		g_blink_numbers = (g_blink_numbers + 1) % 10;
+	}
+	
 	set_number(pins_d1, g_blink_numbers);
 	set_number(pins_d2, g_blink_numbers);
 	set_number(pins_d3, g_blink_numbers);
 	set_number(pins_d4, g_blink_numbers);
-		
-	g_last_buttons[0] = g_buttons[0];
-	g_last_buttons[1] = g_buttons[1];
 }
 
 
+//Program entry point
 int main()
 {
 	setup();
