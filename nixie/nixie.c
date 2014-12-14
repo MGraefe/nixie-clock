@@ -362,6 +362,7 @@ void on_increment_pressed()
 void main_program(void)
 {
 	update_buttons();
+	uint8_t output[2];
 	
 	//Menu button pressed? Switch menu mode
 	if(g_buttons[0] && !g_last_buttons[0])
