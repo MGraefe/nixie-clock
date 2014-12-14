@@ -318,7 +318,7 @@ void update_button(uint8_t index)
 		g_buttons[index] = 1;
 		g_last_button_action[index] = g_ticks;
 	}
-	else if(time_since(g_last_button_action[index]) > 15)
+	else if(time_since(g_last_button_action[index]) > 8)
 	{
 		g_buttons[index] = 0;
 	}
