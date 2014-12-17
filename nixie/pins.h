@@ -11,7 +11,7 @@
 enum inout_e
 {
 	PIN_IN = 0,
-	PIN_OUT,
+	PIN_OUT
 };
 
 //Port mappings

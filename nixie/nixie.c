@@ -52,7 +52,7 @@ enum modes_e
 	MODE_SET_DAY,
 	MODE_SET_MONTH,
 	
-	MODE_COUNT, //LAST ONE!
+	MODE_COUNT //LAST ONE!
 };
 
 
@@ -116,10 +116,10 @@ enum modes_e g_mode = MODE_NORMAL;
 
 void set_number(const struct pin_t *pins, uint8_t number)
 {
-	set_pin(&pins[0], number & 0b0001);
-	set_pin(&pins[1], number & 0b0010);
-	set_pin(&pins[2], number & 0b0100);
-	set_pin(&pins[3], number & 0b1000);
+	set_pin(&pins[0], number & 0x1);
+	set_pin(&pins[1], number & 0x2);
+	set_pin(&pins[2], number & 0x4);
+	set_pin(&pins[3], number & 0x8);
 }
 
 void write_output(uint8_t a, uint8_t b)
@@ -137,10 +137,11 @@ uint8_t button_pressed(uint8_t index)
 
 void setup()
 {
+	uint8_t i;
 	cli(); //stop interrupts
 	
 	//Configure tube pins as PIN_OUTs
-	for(uint8_t i = 0; i < 4; i++)
+	for(i = 0; i < 4; i++)
 	{
 		set_pin_inout(&pins_d1[i], PIN_OUT);
 		set_pin_inout(&pins_d2[i], PIN_OUT);
@@ -290,8 +291,9 @@ void on_increment_pressed()
 //The main program (this function is called in an endless loop)
 void main_program(void)
 {
-	update_buttons();
 	uint8_t output[2];
+	
+	update_buttons();
 	
 	//Menu button pressed? Switch menu mode
 	if(g_buttons[0] && !g_last_buttons[0])
