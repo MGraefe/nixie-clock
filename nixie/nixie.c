@@ -1,6 +1,6 @@
 // nixie.c
 // Nixie clock program
-// Copyright (c) 2014 Marius Gräfe
+// Copyright (c) 2014 Marius Graefe
 
 
 // ### Physical system-characteristics ###
@@ -40,79 +40,8 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-enum inout_e
-{
-	PIN_IN = 0,
-	PIN_OUT,
-};
-
-//Port mappings
-#define PB 0
-#define PC 1
-#define PD 2
-
-struct pin_t
-{
-  uint8_t port;
-  uint8_t pin;
-};
-
-
-void set_pin(const struct pin_t *pin, uint8_t value)
-{
-	uint8_t mask = 1 << pin->pin;
-	volatile uint8_t *port;
-
-	switch(pin->port)
-	{
-		case PB: port = &PORTB; break;
-		case PC: port = &PORTC; break;
-		case PD: port = &PORTD; break;
-		default: port = 0;
-	};
-
-	*port = value ? *port | mask : *port & (~mask);
-}
-
-
-void set_pin_inout(const struct pin_t *pin, enum inout_e value)
-{
-	uint8_t mask = 1 << pin->pin;
-	volatile uint8_t *port;
-
-	switch(pin->port)
-	{
-		case PB: port = &DDRB; break;
-		case PC: port = &DDRC; break;
-		case PD: port = &DDRD; break;
-		default: port = 0;
-	}
-
-	*port = value ? *port | mask : *port & (~mask);
-}
-
-
-uint8_t read_pin(const struct pin_t *pin)
-{
-	uint8_t mask = 1 << pin->pin;
-	switch(pin->port)
-	{
-		case PB: return PINB & mask;
-		case PC: return PINC & mask;
-		case PD: return PIND & mask;
-		default: return 0;
-	}
-}
-
-
-struct time_t
-{
-    uint8_t month;
-    uint8_t day;
-    uint8_t hours;
-    uint8_t minutes;
-    uint8_t seconds;
-};
+#include "time.h"
+#include "pins.h"
 
 
 enum modes_e

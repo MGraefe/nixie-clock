@@ -109,7 +109,22 @@
     </ToolchainSettings>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="dcf77.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="dcf77.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="nixie.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="pins.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="pins.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="time.h">
       <SubType>compile</SubType>
     </Compile>
   </ItemGroup>
