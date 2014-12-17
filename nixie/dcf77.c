@@ -6,14 +6,17 @@
 #include <stdint.h>
 #include "time.h"
 
+#define INVALID_BIT_INDEX ((uint8_t)-1)
+
 static struct time_t *g_time = 0;
 
 static uint8_t g_buffer[8];
 static uint32_t g_last_flank = 0;
 static uint8_t g_last = 0;
-static uint8_t g_bit_index = -1;
+static uint8_t g_bit_index = INVALID_BIT_INDEX;
 static uint8_t g_parity = 0;
 static uint8_t minute_tens, minute_ones, hour_tens, hour_ones, day_tens, day_ones, month_ones, month_tens;
+
 
 
 void dcf77_init(struct time_t *time)
@@ -24,14 +27,14 @@ void dcf77_init(struct time_t *time)
 
 void dcf77_scrap()
 {
-	g_bit_index = -1;
+	g_bit_index = INVALID_BIT_INDEX;
 }
 
 
 void add_bit(uint8_t *val, uint8_t bit, uint8_t field_length)
 {
 	*val >>= 1;
-	*val &= (bit << (field_length - 1));
+	*val |= (bit << (field_length - 1));
 }
 
 
@@ -47,7 +50,7 @@ void decode()
 
 void dcf77_add_bit(uint8_t bit)
 {
-	if(g_bit_index == -1)
+	if(g_bit_index == INVALID_BIT_INDEX)
 		return;
 
 	//set / erase bit
@@ -57,7 +60,21 @@ void dcf77_add_bit(uint8_t bit)
 		g_buffer[g_bit_index << 3] &= ~(1 << (g_bit_index & 7));
 	
 	g_parity = g_parity != bit;
-	
+
+	if(g_bit_index == 20)
+		g_parity = 0;
+
+	if(g_bit_index == 28 || g_bit_index == 35 || g_bit_index == 58)
+	{
+		if(bit != g_parity)
+		{
+			dcf77_scrap();
+			return;
+		}
+		else
+			g_parity = 0;
+	}
+
 	if(g_bit_index >= 21 && g_bit_index <= 24)
 		add_bit(&minute_ones, bit, 4);
 	else if(g_bit_index >= 25 && g_bit_index <= 27)
@@ -74,28 +91,21 @@ void dcf77_add_bit(uint8_t bit)
 		add_bit(&month_ones, bit, 4);
 	else if(g_bit_index == 49)
 		add_bit(&month_tens, bit, 1);
-	
-	if(g_bit_index == 28 || g_bit_index == 35 || g_bit_index == 58)
-	{
-		if(bit != g_parity)
-			dcf77_scrap();
-		else
-			g_parity = 0;
-	}
 
 	if(g_bit_index >= 58)
 	{
 		decode();
 		dcf77_scrap();
+		return;
 	}
-	
+
 	g_bit_index++;
 }
 
 
 void on_rising_flank(uint32_t time)
 {
-	if(g_bit_index != -1)
+	if(g_bit_index != INVALID_BIT_INDEX)
 	{
 		uint32_t time_low = time - g_last_flank;
 		if(time_low > 7 && time_low < 13)
@@ -132,16 +142,14 @@ void dcf77_update(uint8_t signal, uint32_t time)
 #ifdef _TEST
 int main()
 {
-	time_t time_obj = 0;
-	dcf77_init(&time_obj);
-	
+	struct time_t time_obj = {1, 1, 0, 0, 0};	
 	uint32_t time = 23;
-	
+	int i;
 	uint8_t bits[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 		1,
 		//minute:
 		1, 0, 0, 1, //9
-		1, 1, 0,    //5
+		1, 1, 0,    //3
 		0,          //parity
 		//hour:
 		0, 0, 0, 1, //8
@@ -154,23 +162,26 @@ int main()
 		1, 0, 0,    //1
 		//month
 		1, 1, 1, 0, //7
-		1, 0,       //1
+		0,          //0
 		//year
 		0, 0, 1, 0,  //4
 		1, 0, 0, 0,  //1
-		1,           //parity
+		1            //parity
 	};
 	
-	while(true)
+	dcf77_init(&time_obj);
+	while(1)
 	{
-		for(int i = 0; i < sizeof(bits); i++)
+		on_rising_flank(time);
+		time += 200;
+		on_falling_flank(time);
+		for(i = 0; i < sizeof(bits); i++)
 		{
-			on_falling_flank(time);
 			time += bits[i] ? 20 : 10;
 			on_rising_flank(time);
-			time += bits[i] ? 98 : 99;
+			time += bits[i] ? 80 : 90;
+			on_falling_flank(time);
 		}
-		time += 101;
 	}
 }
 #endif
