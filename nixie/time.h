@@ -16,4 +16,4 @@ struct time_t
 	uint8_t seconds;
 };
 
-#endif /* TYPES_H_ */
+#endif /* TIME_H_ */
