@@ -42,7 +42,7 @@
 
 #include "time.h"
 #include "pins.h"
-
+#include "dcf77.h"
 
 enum modes_e
 {
@@ -95,6 +95,9 @@ struct pin_t pins_but[] = {
 	{PC, 5}  //BUTTON-1
 };
 
+
+//DCF77 Input
+struct pin_t pin_dcf77 = { PB, 5 };
 
 //LEDs
 struct pin_t pin_leds = { PD, 3 };
@@ -294,6 +297,7 @@ void main_program(void)
 	uint8_t output[2];
 	
 	update_buttons();
+	dcf77_update(!read_pin(&pin_dcf77), g_ticks);
 	
 	//Menu button pressed? Switch menu mode
 	if(g_buttons[0] && !g_last_buttons[0])
