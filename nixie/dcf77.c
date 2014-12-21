@@ -103,7 +103,7 @@ void dcf77_add_bit(uint8_t bit)
 }
 
 
-void on_rising_flank(uint32_t time)
+void dcf77_on_rising_flank(uint32_t time)
 {
 	if(g_bit_index != INVALID_BIT_INDEX)
 	{
@@ -119,7 +119,7 @@ void on_rising_flank(uint32_t time)
 }
 
 
-void on_falling_flank(uint32_t time)
+void dcf77_on_falling_flank(uint32_t time)
 {
 	uint32_t time_high = time - g_last_flank;
 	if(time_high > 190 && time_high < 210)
@@ -131,9 +131,9 @@ void on_falling_flank(uint32_t time)
 void dcf77_update(uint8_t signal, uint32_t time)
 {
 	if(!g_last && signal)
-		on_rising_flank(time);
+		dcf77_on_rising_flank(time);
 	else if(g_last && !signal)
-		on_falling_flank(time);
+		dcf77_on_falling_flank(time);
 	
 	g_last = signal;
 }
@@ -172,15 +172,15 @@ int main()
 	dcf77_init(&time_obj);
 	while(1)
 	{
-		on_rising_flank(time);
+		dcf77_on_rising_flank(time);
 		time += 200;
-		on_falling_flank(time);
+		dcf77_on_falling_flank(time);
 		for(i = 0; i < sizeof(bits); i++)
 		{
 			time += bits[i] ? 20 : 10;
-			on_rising_flank(time);
+			dcf77_on_rising_flank(time);
 			time += bits[i] ? 80 : 90;
-			on_falling_flank(time);
+			dcf77_on_falling_flank(time);
 		}
 	}
 }
