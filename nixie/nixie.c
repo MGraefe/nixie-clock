@@ -163,6 +163,8 @@ void setup()
 	set_pin(&pins_but[0], 1);
 	set_pin(&pins_but[1], 1);
 	
+	dcf77_init(&g_time);
+	
 	//set timer1 interrupt at 100Hz
 	TCCR1A = 0; // set entire TCCR1A register to 0
 	TCCR1B = 0; // same for TCCR1B
